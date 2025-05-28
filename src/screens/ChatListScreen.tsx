@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useEffect, useState } from "react";
 import {
   View,
   Text,
@@ -6,21 +6,95 @@ import {
   TouchableOpacity,
   StyleSheet,
   Image,
+  TextInput,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useNavigation } from "@react-navigation/native";
 import { StackNavigationProp } from "@react-navigation/stack";
 import { RootStackParamList } from "../../App";
 import { useDatabase, Chat } from "../context/DatabaseContext";
-
+import * as Contacts from "expo-contacts";
 type ChatListScreenNavigationProp = StackNavigationProp<
   RootStackParamList,
   "ChatList"
 >;
 
+export const normalizeNumber = (number: string) => {
+  return number.replace(/[^0-9]/g, ""); // Remove non-digits
+};
+// Make sure ContactsList is an array of contacts, not the module itself
+
+const findContactName = (whatsappJid: string, contacts: Array<any>): string => {
+  const phone = normalizeNumber(whatsappJid.split("@")[0]);
+  for (const contact of contacts) {
+    for (const phoneNumber of contact.phoneNumbers || []) {
+      const contactNumber = normalizeNumber(phoneNumber.number);
+      if (contactNumber.endsWith(phone)) {
+        return contact.name || null;
+      }
+      const temp = contactNumber.replace(/\D/g, ""); // Normalize contact number
+      if (phone.endsWith(normalizeNumber(temp)) && temp.length >= 5) {
+        return contact.name || null;
+      }
+    }
+  }
+  const phoneNumber = whatsappJid.split("@")[0];
+  return phoneNumber.replace(/\D/g, "");
+};
+
 const ChatListScreen: React.FC = () => {
+  const [contacts, setContacts] = useState<Contacts.Contact[]>([]);
+  const [searchText, setSearchText] = useState("");
+  const [filteredChats, setFilteredChats] = useState<Chat[]>([]);
+
+  useEffect(() => {
+    (async () => {
+      const { status } = await Contacts.requestPermissionsAsync();
+      console.log("Permission status:", status);
+      if (status === "granted") {
+        const { data } = await Contacts.getContactsAsync({
+          fields: [Contacts.Fields.Name, Contacts.Fields.PhoneNumbers],
+        });
+
+        if (data.length > 0) {
+          console.log("Loaded contacts:", data.length);
+          setContacts(data);
+          console.log("Contacts:", data[0]);
+        } else {
+          console.log("No contacts found.");
+        }
+      } else {
+        console.log("Contacts permission denied");
+      }
+    })();
+  }, []);
+
   const navigation = useNavigation<ChatListScreenNavigationProp>();
   const { chats } = useDatabase();
+
+  useEffect(() => {
+    setFilteredChats(chats);
+    console.log("FilterChats loaded:", filteredChats.length);
+  }, [chats]);
+
+  const [contactMap, setContactMap] = useState<{
+    [normalizedNumber: string]: string;
+  }>({});
+
+  useEffect(() => {
+    const map: { [key: string]: string } = {};
+
+    for (const contact of contacts) {
+      for (const phoneNumber of contact.phoneNumbers || []) {
+        const num = normalizeNumber(phoneNumber.number);
+        if (num.length >= 5) {
+          map[num] = contact.name;
+        }
+      }
+    }
+
+    setContactMap(map);
+  }, [contacts]);
 
   const formatDate = (timestamp: number): string => {
     const date = new Date(timestamp * 1000);
@@ -45,22 +119,61 @@ const ChatListScreen: React.FC = () => {
   };
 
   const getDisplayName = (chat: Chat): string => {
+    if (isGroupChat(chat.key_remote_jid)) {
+      return chat.subject || "Group Chat";
+    }
     if (chat.subject) {
-      return chat.subject;
+      // console.log("Using chat subject for display name:", chat.subject);
+      // return chat.subject;
+      return findContactName(chat.subject, contacts) || chat.subject;
     }
 
     const jid = chat.key_remote_jid;
     if (jid.includes("@g.us")) {
       return "Group Chat";
     }
-
     // Extract phone number from JID
-    const phoneNumber = jid.split("@")[0];
-    return phoneNumber.replace(/\D/g, "");
+    return findContactName(jid, contacts) || jid.split("@")[0];
   };
 
   const isGroupChat = (jid: string): boolean => {
     return jid.includes("@g.us");
+  };
+  const findContactNameFast = (jid: string): string => {
+    const phone = normalizeNumber(jid.split("@")[0]);
+
+    // Try finding longest suffix match
+    for (let i = 0; i < phone.length - 4; i++) {
+      const suffix = phone.slice(i);
+      if (contactMap[suffix]) {
+        return contactMap[suffix];
+      }
+    }
+
+    return phone; // fallback
+  };
+
+  const handleSearch = () => {
+    const text = searchText;
+    const normalizedText = text.toLowerCase();
+    console.log("Search text:", text);
+    console.log(chats.length, "chats loaded for search");
+
+    const filtered = chats.filter((chat) => {
+      // const name = getDisplayName(chat).toLowerCase();
+      const contactName = findContactNameFast(
+        chat.key_remote_jid
+      ).toLowerCase();
+
+      return contactName.includes(normalizedText);
+    });
+    console.log("Filtered chats:", filtered);
+    setFilteredChats(filtered);
+  };
+
+  const handleCancelSearch = () => {
+    setSearchText("");
+    setFilteredChats(chats);
   };
 
   const renderChatItem = ({ item }: { item: Chat }) => (
@@ -117,14 +230,53 @@ const ChatListScreen: React.FC = () => {
   }
 
   return (
+    // <View style={styles.container}>
+    //   <FlatList
+    //     data={chats}
+    //     renderItem={renderChatItem}
+    //     keyExtractor={(item) => item.key_remote_jid}
+    //     style={styles.chatList}
+    //     showsVerticalScrollIndicator={false}
+    //   />
+    // </View>
     <View style={styles.container}>
-      <FlatList
-        data={chats}
-        renderItem={renderChatItem}
-        keyExtractor={(item) => item.key_remote_jid}
-        style={styles.chatList}
-        showsVerticalScrollIndicator={false}
-      />
+      {/* ✅ Search bar and Cancel */}
+      <View style={styles.searchContainer}>
+        <TextInput
+          placeholder="Search by name or number"
+          value={searchText}
+          onChangeText={setSearchText}
+          style={styles.searchInput}
+        />
+        <TouchableOpacity onPress={handleSearch} style={styles.searchButton}>
+          <Text style={styles.searchButtonText}>Search</Text>
+        </TouchableOpacity>
+        {searchText.length > 0 && (
+          <TouchableOpacity
+            onPress={handleCancelSearch}
+            style={styles.cancelButton}
+          >
+            <Text style={styles.cancelText}>Cancel</Text>
+          </TouchableOpacity>
+        )}
+      </View>
+
+      {filteredChats.length === 0 ? (
+        (console.log("No chats found"),
+        (
+          <View style={styles.emptyContainer}>
+            <Ionicons name="chatbubbles-outline" size={80} color="#ccc" />
+            <Text style={styles.emptyText}>No chats found</Text>
+          </View>
+        ))
+      ) : (
+        <FlatList
+          data={filteredChats}
+          renderItem={renderChatItem}
+          keyExtractor={(item) => item.key_remote_jid}
+          style={styles.chatList}
+        />
+      )}
     </View>
   );
 };
@@ -133,6 +285,38 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: "#f5f5f5",
+  },
+  searchContainer: {
+    flexDirection: "row",
+    padding: 10,
+    backgroundColor: "#fff",
+    alignItems: "center",
+  },
+  searchInput: {
+    flex: 1,
+    backgroundColor: "#eee",
+    borderRadius: 10,
+    paddingHorizontal: 10,
+    paddingVertical: 8,
+    fontSize: 16,
+  },
+  searchButton: {
+    marginLeft: 10,
+    backgroundColor: "#007aff",
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    borderRadius: 6,
+  },
+  searchButtonText: {
+    color: "#fff",
+    fontWeight: "bold",
+  },
+  cancelButton: {
+    marginLeft: 10,
+  },
+  cancelText: {
+    color: "#007aff",
+    fontSize: 16,
   },
   chatList: {
     flex: 1,

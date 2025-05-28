@@ -10,10 +10,14 @@ import { RouteProp, useRoute } from "@react-navigation/native";
 import { RootStackParamList } from "../../App";
 import { useDatabase, Message } from "../context/DatabaseContext";
 import { Ionicons } from "@expo/vector-icons";
+import * as Contacts from "expo-contacts";
+import { normalizeNumber } from "./ChatListScreen";
 
 type ChatScreenRouteProp = RouteProp<RootStackParamList, "Chat">;
 
 const ChatScreen: React.FC = () => {
+  const [contacts, setContacts] = useState<Contacts.Contact[]>([]);
+
   const route = useRoute<ChatScreenRouteProp>();
   const { chatId } = route.params;
   const { getMessages } = useDatabase();
@@ -23,6 +27,46 @@ const ChatScreen: React.FC = () => {
   useEffect(() => {
     loadMessages();
   }, [chatId]);
+  useEffect(() => {
+    (async () => {
+      const { status } = await Contacts.requestPermissionsAsync();
+      console.log("Permission status:", status);
+      if (status === "granted") {
+        const { data } = await Contacts.getContactsAsync({
+          fields: [Contacts.Fields.Name, Contacts.Fields.PhoneNumbers],
+        });
+
+        if (data.length > 0) {
+          console.log("Loaded contacts:", data.length);
+          setContacts(data);
+          console.log("Contacts:", data[0]);
+        } else {
+          console.log("No contacts found.");
+        }
+      } else {
+        console.log("Contacts permission denied");
+      }
+    })();
+  }, []);
+
+  const [contactMap, setContactMap] = useState<{
+    [normalizedNumber: string]: string;
+  }>({});
+
+  useEffect(() => {
+    const map: { [key: string]: string } = {};
+
+    for (const contact of contacts) {
+      for (const phoneNumber of contact.phoneNumbers || []) {
+        const num = normalizeNumber(phoneNumber.number);
+        if (num.length >= 5) {
+          map[num] = contact.name;
+        }
+      }
+    }
+
+    setContactMap(map);
+  }, [contacts]);
 
   const loadMessages = async () => {
     try {
@@ -90,6 +134,19 @@ const ChatScreen: React.FC = () => {
         return "help";
     }
   };
+  const findContactNameFast = (jid: string): string => {
+    const phone = normalizeNumber(jid.split("@")[0]);
+
+    // Try finding longest suffix match
+    for (let i = 0; i < phone.length - 4; i++) {
+      const suffix = phone.slice(i);
+      if (contactMap[suffix]) {
+        return contactMap[suffix];
+      }
+    }
+
+    return phone; // fallback
+  };
 
   const renderMessage = ({ item, index }: { item: Message; index: number }) => {
     const isFromMe = item.key_from_me === 1;
@@ -116,8 +173,10 @@ const ChatScreen: React.FC = () => {
               isFromMe ? styles.sentBubble : styles.receivedBubble,
             ]}
           >
-            {!isFromMe && item.remote_resource && (
-              <Text style={styles.senderName}>{item.remote_resource}</Text>
+            {!isFromMe && (
+              <Text style={styles.senderName}>
+                {findContactNameFast(item.key_remote_jid)}
+              </Text>
             )}
 
             <Text
@@ -193,7 +252,7 @@ const ChatScreen: React.FC = () => {
         keyExtractor={(item) => item._id.toString()}
         style={styles.messagesList}
         showsVerticalScrollIndicator={false}
-        inverted={false}
+        inverted={true}
       />
     </View>
   );

@@ -126,7 +126,7 @@ export const DatabaseProvider: React.FC<{ children: React.ReactNode }> = ({
     if (!database) return [];
 
     try {
-      const [result] = database.execSync(
+      const result = database.getAllSync(
         `SELECT 
             message._id,
             jid.raw_string AS key_remote_jid,
@@ -148,11 +148,12 @@ export const DatabaseProvider: React.FC<{ children: React.ReactNode }> = ({
          LEFT JOIN jid ON chat.jid_row_id = jid._id
          LEFT JOIN message_media ON message._id = message_media.message_row_id
          WHERE jid.raw_string = ?
-         ORDER BY message.timestamp ASC`,
+         AND message.message_type = 0
+         ORDER BY message.timestamp DESC`,
         [chatJid]
       );
-
-      return result.rows as Message[];
+      console.log("📋 Message rows:", result[0]);
+      return result as Message[];
     } catch (error) {
       console.error("Error loading messages:", error);
       return [];
