@@ -20,7 +20,7 @@ const ChatScreen: React.FC = () => {
 
   const route = useRoute<ChatScreenRouteProp>();
   const { chatId } = route.params;
-  const { getMessages } = useDatabase();
+  const { getMessages, getJidRawString } = useDatabase();
   const [messages, setMessages] = useState<Message[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -134,6 +134,9 @@ const ChatScreen: React.FC = () => {
         return "help";
     }
   };
+  const isGroupChat = (jid: string): boolean => {
+    return jid.includes("@g.us");
+  };
   const findContactNameFast = (jid: string): string => {
     const phone = normalizeNumber(jid.split("@")[0]);
 
@@ -173,9 +176,14 @@ const ChatScreen: React.FC = () => {
               isFromMe ? styles.sentBubble : styles.receivedBubble,
             ]}
           >
-            {!isFromMe && (
+            {!isFromMe && !isGroupChat(item.key_remote_jid) && (
               <Text style={styles.senderName}>
                 {findContactNameFast(item.key_remote_jid)}
+              </Text>
+            )}
+            {!isFromMe && isGroupChat(item.key_remote_jid) && (
+              <Text style={styles.senderName}>
+                {findContactNameFast(getJidRawString(item.sender_jid_row_id))}
               </Text>
             )}
 

@@ -12,6 +12,7 @@ export interface Chat {
 export interface Message {
   _id: number;
   key_remote_jid: string;
+  sender_jid_row_id: string;
   key_from_me: number;
   key_id: string;
   status: number;
@@ -32,6 +33,7 @@ interface DatabaseContextType {
   chats: Chat[];
   loadDatabase: (uri: string) => Promise<boolean>;
   getMessages: (chatId: string) => Promise<Message[]>;
+  getJidRawString: (jid_row_id: string) => string;
   isLoading: boolean;
 }
 
@@ -67,19 +69,15 @@ export const DatabaseProvider: React.FC<{ children: React.ReactNode }> = ({
 
       // Log size to confirm file is valid
       const info = await FileSystem.getInfoAsync(targetPath);
-      // console.log(`📦 DB copied to: ${targetPath}`);
-      // console.log(`📏 DB size: ${info.size} bytes`);
 
       const db = SQLite.openDatabaseSync("msgstore.db");
-      // console.log("📂 Database path:", targetPath);
-      // console.log("📂 Database opened:", db);
+
       setDatabase(db);
       try {
         const rows = db.getAllSync(
           `SELECT name FROM sqlite_master WHERE type='table'`
         );
         const tables = rows.map((row: any) => row.name);
-        // console.log("📋 Tables in the database:", tables);
       } catch (error) {
         console.error("Failed to list tables:", error);
       }
@@ -103,7 +101,6 @@ export const DatabaseProvider: React.FC<{ children: React.ReactNode }> = ({
        INNER JOIN jid ON chat.jid_row_id = jid._id
        ORDER BY chat.sort_timestamp DESC`
       );
-      console.log("📋 Chat rows:", results[0]);
       if (results.length === 0) {
         console.log("No chat rows returned.");
         return;
@@ -121,7 +118,20 @@ export const DatabaseProvider: React.FC<{ children: React.ReactNode }> = ({
       console.error("❌ Error loading chats:", error);
     }
   };
+  const getJidRawString = (jid_row_id: string): string => {
+    if (!database) return "NULL";
 
+    try {
+      const result: any[] = database.getAllSync(
+        `SELECT raw_string FROM jid WHERE _id = ?`,
+        [jid_row_id]
+      );
+      return result.length > 0 ? result[0].raw_string : "NULL";
+    } catch (error) {
+      console.error("Error loading messages:", error);
+      return "NULL";
+    }
+  };
   const getMessages = async (chatJid: string): Promise<Message[]> => {
     if (!database) return [];
 
@@ -131,6 +141,7 @@ export const DatabaseProvider: React.FC<{ children: React.ReactNode }> = ({
             message._id,
             jid.raw_string AS key_remote_jid,
             message.from_me AS key_from_me,
+            message.sender_jid_row_id AS sender_jid_row_id,
             message.key_id,
             message.status,
             0 AS needs_push,
@@ -152,7 +163,6 @@ export const DatabaseProvider: React.FC<{ children: React.ReactNode }> = ({
          ORDER BY message.timestamp DESC`,
         [chatJid]
       );
-      console.log("📋 Message rows:", result[0]);
       return result as Message[];
     } catch (error) {
       console.error("Error loading messages:", error);
@@ -174,6 +184,7 @@ export const DatabaseProvider: React.FC<{ children: React.ReactNode }> = ({
         chats,
         loadDatabase,
         getMessages,
+        getJidRawString,
         isLoading,
       }}
     >

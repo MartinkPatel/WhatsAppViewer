@@ -123,8 +123,6 @@ const ChatListScreen: React.FC = () => {
       return chat.subject || "Group Chat";
     }
     if (chat.subject) {
-      // console.log("Using chat subject for display name:", chat.subject);
-      // return chat.subject;
       return findContactName(chat.subject, contacts) || chat.subject;
     }
 
@@ -167,7 +165,6 @@ const ChatListScreen: React.FC = () => {
 
       return contactName.includes(normalizedText);
     });
-    console.log("Filtered chats:", filtered);
     setFilteredChats(filtered);
   };
 
