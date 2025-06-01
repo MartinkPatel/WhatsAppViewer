@@ -102,7 +102,7 @@ export const DatabaseProvider: React.FC<{ children: React.ReactNode }> = ({
        ORDER BY chat.sort_timestamp DESC`
       );
       if (results.length === 0) {
-        console.log("No chat rows returned.");
+        // console.log("No chat rows returned.");
         return;
       }
 

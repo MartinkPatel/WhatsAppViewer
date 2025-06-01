@@ -50,21 +50,21 @@ const ChatListScreen: React.FC = () => {
   useEffect(() => {
     (async () => {
       const { status } = await Contacts.requestPermissionsAsync();
-      console.log("Permission status:", status);
+      // console.log("Permission status:", status);
       if (status === "granted") {
         const { data } = await Contacts.getContactsAsync({
           fields: [Contacts.Fields.Name, Contacts.Fields.PhoneNumbers],
         });
 
         if (data.length > 0) {
-          console.log("Loaded contacts:", data.length);
+          // console.log("Loaded contacts:", data.length);
           setContacts(data);
-          console.log("Contacts:", data[0]);
+          // console.log("Contacts:", data[0]);
         } else {
-          console.log("No contacts found.");
+          // console.log("No contacts found.");
         }
       } else {
-        console.log("Contacts permission denied");
+        // console.log("Contacts permission denied");
       }
     })();
   }, []);
@@ -74,7 +74,7 @@ const ChatListScreen: React.FC = () => {
 
   useEffect(() => {
     setFilteredChats(chats);
-    console.log("FilterChats loaded:", filteredChats.length);
+    // console.log("FilterChats loaded:", filteredChats.length);
   }, [chats]);
 
   const [contactMap, setContactMap] = useState<{
@@ -154,8 +154,8 @@ const ChatListScreen: React.FC = () => {
   const handleSearch = () => {
     const text = searchText;
     const normalizedText = text.toLowerCase();
-    console.log("Search text:", text);
-    console.log(chats.length, "chats loaded for search");
+    // console.log("Search text:", text);
+    // console.log(chats.length, "chats loaded for search");
 
     const filtered = chats.filter((chat) => {
       // const name = getDisplayName(chat).toLowerCase();
@@ -259,13 +259,11 @@ const ChatListScreen: React.FC = () => {
       </View>
 
       {filteredChats.length === 0 ? (
-        (console.log("No chats found"),
-        (
-          <View style={styles.emptyContainer}>
-            <Ionicons name="chatbubbles-outline" size={80} color="#ccc" />
-            <Text style={styles.emptyText}>No chats found</Text>
-          </View>
-        ))
+        // console.log("No chats found"),
+        <View style={styles.emptyContainer}>
+          <Ionicons name="chatbubbles-outline" size={80} color="#ccc" />
+          <Text style={styles.emptyText}>No chats found</Text>
+        </View>
       ) : (
         <FlatList
           data={filteredChats}

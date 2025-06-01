@@ -30,21 +30,21 @@ const ChatScreen: React.FC = () => {
   useEffect(() => {
     (async () => {
       const { status } = await Contacts.requestPermissionsAsync();
-      console.log("Permission status:", status);
+      // console.log("Permission status:", status);
       if (status === "granted") {
         const { data } = await Contacts.getContactsAsync({
           fields: [Contacts.Fields.Name, Contacts.Fields.PhoneNumbers],
         });
 
         if (data.length > 0) {
-          console.log("Loaded contacts:", data.length);
+          // console.log("Loaded contacts:", data.length);
           setContacts(data);
-          console.log("Contacts:", data[0]);
+          // console.log("Contacts:", data[0]);
         } else {
-          console.log("No contacts found.");
+          // console.log("No contacts found.");
         }
       } else {
-        console.log("Contacts permission denied");
+        // console.log("Contacts permission denied");
       }
     })();
   }, []);
